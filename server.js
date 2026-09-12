@@ -1,18 +1,28 @@
 // server.js — server sederhana untuk Sudut Rasa Coffee
 // Menyajikan file website (index.html, profile.html, style.css, assets)
-// dan menyimpan pesan dari form kontak ke file data/pesan.json
+// dan menyimpan pesan dari form kontak.
+//
+// CATATAN UNTUK DEPLOY DI VERCEL:
+// Vercel tidak menyediakan penyimpanan file permanen. Folder /tmp bisa ditulisi,
+// tapi isinya bisa hilang kapan saja (server serverless "tidur" lalu bangun lagi
+// dengan folder /tmp yang kosong). Jadi di Vercel, data pesan HANYA sementara.
+// Untuk penyimpanan permanen di production, nanti sebaiknya pindah ke database
+// (misalnya Vercel Postgres, atau Supabase).
 
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const DATA_DIR = path.join(__dirname, 'data');
+// Jalan di Vercel? pakai folder /tmp (satu-satunya yang bisa ditulisi di sana).
+// Jalan di komputer sendiri? tetap pakai folder data/ seperti biasa.
+const isVercel = !!process.env.VERCEL;
+const DATA_DIR = isVercel ? path.join(os.tmpdir(), 'sudutrasa-data') : path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'pesan.json');
 
-// Pastikan folder & file data ada sebelum server jalan
 function pastikanFileData() {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -28,7 +38,7 @@ function bacaPesan() {
     const isi = fs.readFileSync(DATA_FILE, 'utf-8');
     return JSON.parse(isi);
   } catch (err) {
-    console.error('Gagal membaca data/pesan.json:', err);
+    console.error('Gagal membaca pesan.json:', err);
     return [];
   }
 }
@@ -64,14 +74,20 @@ app.post('/api/pesan', (req, res) => {
   res.status(201).json({ ok: true, data: entriBaru });
 });
 
-// Lihat semua pesan yang tersimpan (dipakai untuk cek isi data/pesan.json lewat browser)
+// Lihat semua pesan yang tersimpan
 app.get('/api/pesan', (req, res) => {
   res.json(bacaPesan());
 });
 
 pastikanFileData();
 
-app.listen(PORT, () => {
-  console.log(`Sudut Rasa Coffee jalan di http://localhost:${PORT}`);
-  console.log(`Pesan tersimpan di ${DATA_FILE}`);
-});
+// Di komputer sendiri: jalankan server seperti biasa dengan app.listen().
+// Di Vercel: JANGAN app.listen() — Vercel yang mengurus itu sendiri lewat module.exports.
+if (!isVercel) {
+  app.listen(PORT, () => {
+    console.log(`Sudut Rasa Coffee jalan di http://localhost:${PORT}`);
+    console.log(`Pesan tersimpan di ${DATA_FILE}`);
+  });
+}
+
+module.exports = app;
